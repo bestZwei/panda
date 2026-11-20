@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>系统警告</title>
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; user-select: none; }
+  .panda {
+    position: absolute;
+    width: 74px;
+    height: 88px;
+    left: 0;
+    top: -110px;
+    opacity: 0;
+    animation: fall var(--dur) linear var(--delay) forwards;
+  }
+  .panda img { width: 100%; height: 100%; }
+  @keyframes fall {
+    0% { transform: translateY(0) rotate(var(--rot)); opacity: 0; }
+    10% { opacity: 1; }
+    100% { transform: translateY(115vh) rotate(calc(var(--rot) + 420deg)); opacity: .92; }
+  }
+  .banner {
+    position: absolute;
+    top: 34%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    min-width: 380px;
+    background: #f3f3f3;
+    border-left: 5px solid #c62828;
+    border-radius: 4px;
+    padding: 16px 22px;
+    color: #222;
+    box-shadow: 0 10px 40px rgba(0,0,0,.28);
+    animation: pop .4s cubic-bezier(.2,.9,.3,1.2) both;
+  }
+  @keyframes pop { from { transform: translate(-50%, -50%) scale(.85); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+  .banner .row { display: flex; align-items: center; gap: 12px; }
+  .banner .icon {
+    width: 30px; height: 30px; border-radius: 50%; background: #c62828;
+    color: #fff; font-size: 20px; font-weight: 700; flex: none;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .banner strong { display: block; font-size: 15px; margin-bottom: 3px; }
+  .banner span { font-size: 13px; color: #555; }
+  .banner .track { height: 3px; background: #ddd; margin-top: 14px; }
+  .banner .track i { display: block; height: 100%; width: 0; background: #c62828; animation: load 8s linear forwards; }
+  @keyframes load { to { width: 100%; } }
+  .panda.bouncer { animation: bounceIn var(--dur) ease-in-out var(--delay) forwards; }
+  @keyframes bounceIn {
+    0% { transform: translate(0, -120px) rotate(var(--rot)) scale(.7); opacity: 0; }
+    28% { opacity: 1; }
+    60% { transform: translate(var(--bx, 30px), 45vh) rotate(calc(var(--rot) + 180deg)) scale(1.1); }
+    100% { transform: translate(var(--bx, 30px), 110vh) rotate(calc(var(--rot) + 360deg)) scale(1); opacity: .92; }
+  }
+</style>
+</head>
+<body>
+  <div class="banner">
+    <div class="row">
+      <div class="icon">!</div>
+      <div>
+        <strong>系统警告</strong>
+        <span>检测到异常数量的熊猫进程正在占用桌面</span>
+      </div>
+    </div>
+    <div class="track"><i></i></div>
+  </div>
+  <script>
+    for (var i = 0; i < 52; i++) {
+      var d = document.createElement('div');
+      d.className = 'panda' + (i % 6 === 0 ? ' bouncer' : '');
+      var size = 52 + Math.random() * 46;
+      d.style.width = size + 'px';
+      d.style.height = Math.round(size * 1.19) + 'px';
+      d.style.left = (Math.random() * 100) + 'vw';
+      d.style.setProperty('--dur', (4 + Math.random() * 4).toFixed(2) + 's');
+      d.style.setProperty('--delay', (Math.random() * 1.6).toFixed(2) + 's');
+      d.style.setProperty('--rot', Math.round(Math.random() * 80 - 40) + 'deg');
+      d.style.setProperty('--bx', Math.round(Math.random() * 120 - 60) + 'px');
+      d.innerHTML = '<img src="assets/panda-classic.png" alt="">';
+      document.body.appendChild(d);
+    }
+  </script>
+</body>
+</html>

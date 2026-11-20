@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>熊猫烧香桌宠</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="stage" id="stage">
+  <!-- Only this layer is scaled: the image and its click zones. -->
+  <div class="pet-root" id="petRoot">
+    <div class="pet" id="pet">
+      <img class="panda-img" id="pandaImg" src="assets/panda-classic.png" alt="熊猫烧香">
+      <svg class="fx-overlay" viewBox="0 0 390 510" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <g class="smoke-group" fill="none" stroke="#888780" stroke-width="3" stroke-linecap="round">
+          <path class="smoke s1" d="M150 116 Q138 100 150 86 Q162 72 150 58"/>
+          <path class="smoke s2" d="M195 108 Q183 92 195 78 Q207 64 195 50"/>
+          <path class="smoke s3" d="M240 116 Q228 100 240 86 Q252 72 240 58"/>
+        </g>
+        <ellipse class="third-eye" cx="195" cy="168" rx="10" ry="12" fill="#e24b4a" stroke="#2c2c2a" stroke-width="2"/>
+        <g class="zzz" fill="#5f5e5a" font-family="sans-serif" font-weight="500">
+          <text class="z1" x="300" y="150" font-size="26">z</text>
+          <text class="z2" x="330" y="118" font-size="20">z</text>
+          <text class="z3" x="352" y="92" font-size="15">z</text>
+        </g>
+      </svg>
+      <div class="hit-zone zone-incense" data-zone="incense"></div>
+      <div class="hit-zone zone-head" data-zone="head"></div>
+      <div class="hit-zone zone-body" data-zone="body"></div>
+    </div>
+
+    <div class="pet-meter">
+      <div class="meter-row">
+        <span class="meter-ico incense" title="香火值">
+          <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+            <path d="M8 3.6 Q6.4 2 8 0.6" fill="none" stroke="#b0ada4" stroke-width="0.9" stroke-linecap="round"/>
+            <line x1="8" y1="6" x2="8" y2="14.5" stroke="#854f0b" stroke-width="1.8" stroke-linecap="round"/>
+            <circle cx="8" cy="5" r="1.7" fill="#d4533e"/>
+          </svg>
+        </span>
+        <div class="meter-track"><div class="meter-fill incense" id="meterIncense"></div></div>
+        <span class="meter-val" id="meterIncenseVal">80</span>
+      </div>
+      <div class="meter-row">
+        <span class="meter-ico mood" title="心情值">
+          <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+            <path d="M8 14.2 C8 14.2 1.3 9.6 1.3 5.5 C1.3 3.2 3 1.9 4.8 1.9 C6 1.9 7.2 2.6 8 3.8 C8.8 2.6 10 1.9 11.2 1.9 C13 1.9 14.7 3.2 14.7 5.5 C14.7 9.6 8 14.2 8 14.2 Z" fill="#d4537e"/>
+          </svg>
+        </span>
+        <div class="meter-track"><div class="meter-fill mood" id="meterMood"></div></div>
+        <span class="meter-val" id="meterMoodVal">80</span>
+      </div>
+      <div class="meter-row exp-row">
+        <span class="meter-ico exp" title="宠物等级经验">
+          <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+            <path d="M8 1.4 L10 5.8 L14.8 6.3 L11.1 9.4 L12.3 14 L8 11.5 L3.7 14 L4.9 9.4 L1.2 6.3 L6 5.8 Z" fill="#ba7517"/>
+          </svg>
+        </span>
+        <div class="meter-track"><div class="meter-fill exp" id="meterExp"></div></div>
+        <span class="meter-val" id="meterExpVal">Lv.1</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Everything textual stays at a fixed, readable size. -->
+  <div class="ui-layer" id="uiLayer">
+    <div class="toolbar" id="toolbar">
+      <button class="tool food-drag" data-action="bamboo" data-food="bamboo" draggable="true" title="点击喂食，也可拖到熊猫身上">竹</button>
+      <button class="tool food-drag" data-action="incense" data-food="incense" draggable="true" title="点击添香，也可拖到熊猫身上">香</button>
+      <button class="tool food-drag" data-action="meme" data-food="meme" draggable="true" title="点击喂梗，也可拖到熊猫身上">梗</button>
+      <button class="tool" data-action="mute" title="音效开关">音</button>
+      <button class="tool" data-action="settings" title="设置">设</button>
+      <button class="tool" data-action="close" title="退出">×</button>
+    </div>
+
+    <div class="rescue" id="rescue" title="香火告急，点我续上">上香</div>
+
+    <div class="bubble" id="bubble"></div>
+
+    <div class="fx-layer" id="fxLayer"></div>
+
+    <div class="menu" id="menu">
+      <button data-action="feed-bamboo">喂竹子</button>
+      <button data-action="feed-incense">添香</button>
+      <button data-action="feed-meme">喂梗图</button>
+      <button data-action="fortune">求一签</button>
+      <button data-action="daily">今日签</button>
+      <button data-action="checkin">每日上香</button>
+      <button data-action="chat">聊聊天</button>
+      <button data-action="decision">帮我决定</button>
+      <button data-action="growth">成长档案</button>
+      <button data-action="achievements">成就墙</button>
+      <button data-action="dance">跳个舞</button>
+      <button data-action="screenshot">保存明信片</button>
+      <button data-action="swarm">熊猫暴雨</button>
+      <button data-action="shutdown">系统关机</button>
+      <button data-action="infect">蓝屏故障</button>
+      <button data-action="mischief">随机捣乱</button>
+      <button data-action="anger">惹它生气</button>
+      <button data-action="settings">设置</button>
+      <button data-action="about">关于</button>
+    </div>
+
+    <div class="panel" id="panel">
+      <div class="panel-head"><span>桌宠设置</span><button id="panelClose">×</button></div>
+      <label class="range-row">大小 <input type="range" id="scale" min="0.7" max="1.4" step="0.05" value="1"><span id="scaleVal">100%</span></label>
+      <label class="range-row">透明度 <input type="range" id="opacity" min="0.4" max="1" step="0.05" value="1"><span id="opacityVal">100%</span></label>
+      <label class="check"><input type="checkbox" id="alwaysTop" checked> 窗口置顶</label>
+      <label class="check"><input type="checkbox" id="passThrough"> 鼠标穿透（Ctrl+Alt+P 恢复）</label>
+      <label class="check"><input type="checkbox" id="soundOn" checked> 音效总开关</label>
+      <label class="check sub"><input type="checkbox" id="soundFx" checked> 提示音（点击 / 喂食）</label>
+      <label class="check sub"><input type="checkbox" id="soundMusic" checked> 音乐（跳舞旋律）</label>
+      <label class="check sub"><input type="checkbox" id="soundEgg" checked> 彩蛋音（恶搞音效）</label>
+      <label class="check"><input type="checkbox" id="startup"> 开机自启（默认关）</label>
+      <label class="check"><input type="checkbox" id="attention" checked> 眼神跟随鼠标</label>
+      <label class="check"><input type="checkbox" id="prank" checked> 恶搞模式（随机捣乱）</label>
+      <div class="theme-row">
+        <span>主题</span>
+        <div class="theme-buttons">
+          <button class="theme-btn" data-theme="classic">经典</button>
+          <button class="theme-btn" data-theme="spring">春节</button>
+          <button class="theme-btn" data-theme="cyber">赛博</button>
+        </div>
+      </div>
+      <div class="game">
+        <div class="game-result" id="gameResult">小游戏：求签 / 猜拳</div>
+        <div class="game-buttons">
+          <button id="fortuneBtn">求签</button>
+          <button class="rps" data-rps="rock">石头</button>
+          <button class="rps" data-rps="scissors">剪刀</button>
+          <button class="rps" data-rps="paper">布</button>
+        </div>
+      </div>
+      <div class="stats"><div>香火 <b id="incenseVal">80</b></div><div>心情 <b id="moodVal">80</b></div><div>亲密 <b id="bondVal">0</b></div></div>
+      <div class="stats"><div>等级 <b id="levelVal">1</b></div><div>经验 <b id="expVal">0</b></div><div>成就 <b id="achievementVal">0</b></div></div>
+      <div class="stats"><div>聊天 <b id="chatVal">0</b></div><div>上香 <b id="checkinVal">0</b></div></div>
+      <button class="danger" id="quitBtn">退出桌宠</button>
+      <p class="hint">纯视觉玩梗，不修改任何文件。<br>彩蛋可按 Ctrl+Alt+0 提前结束。</p>
+    </div>
+
+    <div class="chat" id="chat">
+      <div class="wall-head">
+        <span>和熊猫聊聊 <small id="bondLabel">陌生</small></span>
+        <button id="chatClose">×</button>
+      </div>
+      <div class="chat-log" id="chatLog"></div>
+      <div class="chat-input">
+        <input type="text" id="chatInput" maxlength="60" placeholder="说点什么…" autocomplete="off">
+        <button id="chatSend">发送</button>
+      </div>
+      <div class="chat-hint">试试：你好 / 叫我XX / 讲个笑话 / 吃什么 / 帮我选A还是B</div>
+    </div>
+
+    <div class="wall" id="wall">
+      <div class="wall-head">
+        <span>成就墙 <small id="wallCount">0 / 16</small></span>
+        <button id="wallClose">×</button>
+      </div>
+      <div class="wall-body" id="wallBody"></div>
+      <div class="wall-foot">
+        <div class="collection-title">签文收藏 <span id="collectionCount">0 / 5</span></div>
+        <div class="collection" id="collection"></div>
+      </div>
+    </div>
+
+    <div class="about" id="about">
+      <div class="wall-head">
+        <span>关于与更新 <small id="updateSource">本地清单</small></span>
+        <button id="aboutClose">×</button>
+      </div>
+      <div class="about-version">
+        <div>当前版本 <b id="appVersion">读取中…</b></div>
+        <div>最新版本 <b id="latestVersion">--</b></div>
+      </div>
+      <div class="update-status" id="updateStatus">正在读取版本信息…</div>
+      <div class="update-log" id="updateLog"></div>
+      <div class="update-actions">
+        <button id="checkUpdateBtn">检查更新</button>
+        <button id="downloadUpdateBtn" disabled>前往下载</button>
+      </div>
+      <p class="hint">纯视觉玩梗，不修改系统文件。更新只提供下载入口，不会自动安装。</p>
+    </div>
+
+    <div class="growth" id="growth">
+      <div class="wall-head">
+        <span>成长档案 <small id="growthTitle">Lv.1 香火学徒</small></span>
+        <button id="growthClose">×</button>
+      </div>
+      <div class="growth-hero">
+        <div class="growth-level" id="growthLevel">1</div>
+        <div class="growth-meta">
+          <b id="growthName">香火学徒</b>
+          <span id="growthPerk">基础互动全解锁</span>
+        </div>
+      </div>
+      <div class="growth-progress">
+        <div class="growth-bar"><div id="growthBar"></div></div>
+        <div class="growth-exp" id="growthExp">0 / 30 经验</div>
+        <div class="growth-next" id="growthNext">距下一级还需 30 经验</div>
+      </div>
+      <div class="growth-rewards" id="growthRewards"></div>
+      <div class="growth-tips">经验来源：投喂 · 摸头 · 戳肚子 · 聊天 · 求签 · 猜拳 · 签到 · 跳舞</div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+  </div>
+</div>
+<script src="renderer.js"></script>
+</body>
+</html>
