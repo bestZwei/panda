@@ -9,6 +9,7 @@ window.addEventListener('unhandledrejection', (event) => {
 
 const $ = (id) => document.getElementById(id);
 const stage = $('stage');
+const petRoot = $('petRoot');
 const pet = $('pet');
 const bubble = $('bubble');
 const fxLayer = $('fxLayer');
@@ -711,7 +712,7 @@ const CHAT_RULES = [
   { keys: ['新年', '过年', '拜年', '春节'], reply: () => '给你拜年啦！红包拿来（开玩笑的）' },
   { keys: ['你是谁', '名字', '什么人'], reply: () => '我是熊猫烧香，2006 年就在这儿给你拜年了。' },
   { keys: ['笑话', '搞笑', '段子'], reply: () => '从前有只熊猫，它烧了三炷香……然后把病毒删了。因为它是好熊猫。' },
-  { keys: ['吃吗', '要不要', '吗'], reply: () => '嗯……让我掐指一算——要！' },
+  { keys: ['吃吗', '要不要', '吃不吃', '来不来'], reply: () => '嗯……让我掐指一算——要！' },
   { keys: ['再见', '拜拜', '走了', '下线'], reply: () => `下次再来上香呀${state.chat.name ? '，' + state.chat.name : ''}～` },
   { keys: ['滚', '笨蛋', '讨厌', '丑'], reply: () => '哼，不理你了。（其实在偷偷看你）' },
   { keys: ['帮', '选', '决定', '怎么办'], reply: () => '这种大事……不如让我帮你掷个骰子？' },
@@ -785,7 +786,14 @@ function openChat() {
   chat.classList.add('show');
   $('bondLabel').textContent = bondLevel().name;
   if (!$('chatLog').children.length) {
-    appendChat('panda', `你好呀${state.chat.name ? '，' + state.chat.name : ''}！我是熊猫烧香～`);
+    if (state.chat.history.length) {
+      state.chat.history.forEach((turn) => {
+        if (turn.me) appendChat('me', turn.me);
+        if (turn.panda) appendChat('panda', turn.panda);
+      });
+    } else {
+      appendChat('panda', `你好呀${state.chat.name ? '，' + state.chat.name : ''}！我是熊猫烧香～`);
+    }
   }
   markActive();
   setTimeout(() => $('chatInput').focus(), 50);
@@ -1115,7 +1123,8 @@ function scheduleIdleFx() {
   clearTimeout(idleFxTimer);
   const wait = 28000 + Math.random() * 22000;
   idleFxTimer = setTimeout(() => {
-    if (dragging || stage.classList.contains('dancing') || stage.classList.contains('mutant')) {
+    const panelOpen = ['panel', 'wall', 'chat', 'about', 'growth'].some((id) => $(id).classList.contains('show'));
+    if (dragging || panelOpen || stage.classList.contains('dancing') || stage.classList.contains('mutant')) {
       scheduleIdleFx();
       return;
     }
@@ -1245,6 +1254,7 @@ function handlePetClick(zone = 'body') {
 
 let dragging = false;
 let dragMoved = false;
+let dragStartScreen = null;
 let activeZone = 'body';
 
 const AMBIENT_CLASSES = [
@@ -1253,6 +1263,7 @@ const AMBIENT_CLASSES = [
 ];
 function clearAmbient() {
   AMBIENT_CLASSES.forEach((cls) => pet.classList.remove(cls));
+  IDLE_FX.forEach((fx) => pet.classList.remove(fx.cls));
   stage.classList.remove('yawning');
 }
 
@@ -1261,6 +1272,7 @@ function clearAmbient() {
 function endDrag(suppressClick = false) {
   if (!dragging) return;
   dragging = false;
+  dragStartScreen = null;
   pet.classList.remove('dragging');
   stage.classList.remove('dragging');
   ipcRenderer.send('pet-drag-end');
@@ -1280,6 +1292,10 @@ pet.addEventListener('mousedown', (event) => {
   markActive();
   dragging = true;
   dragMoved = false;
+  // The window follows the cursor, so clientX/clientY barely change during a
+  // drag. Screen coordinates do, and are the reliable way to tell a real drag
+  // from a long press that should still count as a tap.
+  dragStartScreen = { x: event.screenX, y: event.screenY };
   pet.classList.add('dragging');
   stage.classList.add('dragging');
   ipcRenderer.send('pet-drag-start', { x: event.screenX, y: event.screenY });
@@ -1287,8 +1303,10 @@ pet.addEventListener('mousedown', (event) => {
 });
 
 document.addEventListener('mousemove', (event) => {
-  if (!dragging) return;
-  if (Math.abs(event.movementX) + Math.abs(event.movementY) > 0) dragMoved = true;
+  if (!dragging || !dragStartScreen) return;
+  if (Math.abs(event.screenX - dragStartScreen.x) + Math.abs(event.screenY - dragStartScreen.y) > 2) {
+    dragMoved = true;
+  }
   // The main process follows the real cursor; no IPC needed here.
 });
 
@@ -1323,7 +1341,9 @@ pet.addEventListener('dblclick', (event) => {
 stage.addEventListener('contextmenu', (event) => {
   event.preventDefault();
   // Don't stack the context menu on top of an open panel.
-  if (panel.classList.contains('show') || wall.classList.contains('show') || chat.classList.contains('show')) return;
+  const openPanel = ['panel', 'wall', 'chat', 'about', 'growth']
+    .some((id) => $(id).classList.contains('show'));
+  if (openPanel) return;
   menu.classList.toggle('show');
   menu.style.right = 'auto';
   // The UI layer is no longer scaled, so use raw viewport coordinates.
@@ -1355,6 +1375,8 @@ function handleAction(action, event) {
       toast(state.settings.soundOn ? '音效已开启' : '音效已关闭');
       break;
     case 'settings':
+      wall.classList.remove('show');
+      chat.classList.remove('show');
       about.classList.remove('show');
       growth.classList.remove('show');
       panel.classList.add('show');
@@ -1476,9 +1498,11 @@ function applyUIScale(scale) {
 }
 
 function updatePandaAnchor() {
-  const r = pet.getBoundingClientRect();
+  // Measure the unrotated image layer, not the panda itself: attention tilt
+  // and the bob animation change the panda's bounding box and would make the
+  // toolbar wobble as the pointer moves.
+  const r = petRoot.getBoundingClientRect();
   if (!r.width) return;
-  // Only the horizontal centre is used; the bob animation shifts Y but not X.
   stage.style.setProperty('--panda-cx', `${r.left + r.width / 2}px`);
 }
 
@@ -1684,7 +1708,9 @@ setInterval(() => {
 
 setInterval(() => {
   if (!state.settings.prank || stage.classList.contains('sleeping')) return;
-  if (panel.classList.contains('show') || wall.classList.contains('show') || about.classList.contains('show') || growth.classList.contains('show')) return;
+  const panelOpen = ['panel', 'wall', 'chat', 'about', 'growth']
+    .some((id) => $(id).classList.contains('show'));
+  if (panelOpen) return;
   const teaser = PRANK_LINES[Math.floor(Math.random() * PRANK_LINES.length)];
   spawnPrankText(teaser);
 }, 90000);
@@ -1704,17 +1730,22 @@ if (process.env.PANDA_SELFTEST === '1') console.log('RENDERER BOOT: ready');
 ipcRenderer.on('selftest-run', () => {
   console.log('RENDERER SELFTEST: received run');
   const errors = [];
+  // A dev-only run must not leave a maxed-out pet in the user's real save.
+  const savedStateRaw = localStorage.getItem(STORAGE_KEY);
+  const savedScale = state.settings.scale;
+  const savedOpacity = state.settings.opacity;
   const check = (name, ok) => {
     if (!ok) errors.push(`${name}: assertion failed`);
   };
   const tryRun = (name, fn) => {
     try { fn(); } catch (err) { errors.push(`${name}: ${err && err.message || err}`); }
   };
+  const panels = ['panel', 'wall', 'chat', 'about', 'growth'];
+  const onlyPanel = (id) => panels.every((p) => $(p).classList.contains('show') === (p === id));
 
   tryRun('openChat', openChat);
   check('openChat', chat.classList.contains('show'));
 
-  const rowsBeforeSend = $('chatLog').children.length;
   tryRun('sendChat', () => {
     $('chatInput').value = '你好，熊猫';
     sendChat();
@@ -1762,11 +1793,149 @@ ipcRenderer.on('selftest-run', () => {
   });
   check('tickles', state.stats.tickles >= ticklesBefore + 7 && pet.classList.contains('tickling'));
 
+  // --- Panel exclusivity and every right-click action ---
+  tryRun('actionFeed', () => ['feed-bamboo', 'feed-incense', 'feed-meme'].forEach((a) => handleAction(a)));
+  tryRun('actionGames', () => ['fortune', 'daily', 'checkin', 'decision', 'dance'].forEach((a) => handleAction(a)));
+  tryRun('actionRps', () => { for (let i = 0; i < 8; i += 1) playRps('rock'); });
+  check('rpsMatch', state.stats.rpsMatches > 0);
+  tryRun('actionPranks', () => ['swarm', 'shutdown', 'infect', 'mischief', 'anger'].forEach((a) => handleAction(a)));
+
+  tryRun('openSettingsFromMenu', () => { openWall(); handleAction('settings'); });
+  check('settingsExclusive', onlyPanel('panel'));
+  tryRun('openAboutFromMenu', () => handleAction('about'));
+  check('aboutExclusive', onlyPanel('about'));
+  tryRun('openGrowthFromMenu', () => handleAction('growth'));
+  check('growthExclusive', onlyPanel('growth'));
+  tryRun('openWallFromMenu', () => handleAction('achievements'));
+  check('wallExclusive', onlyPanel('wall'));
+  tryRun('openChatFromMenu', () => handleAction('chat'));
+  check('chatExclusive', onlyPanel('chat'));
+
+  tryRun('chatNameMemory', () => {
+    state.mood = 80;
+    $('chatInput').value = '叫我阿香';
+    sendChat();
+  });
+  check('chatNameMemory', state.chat.name === '阿香');
+  tryRun('chatHistory', () => {
+    check('chatHistorySaved', state.chat.history.length > 0 && state.chat.history.some((t) => t.me === '叫我阿香'));
+    $('chatLog').innerHTML = '';
+    openChat();
+  });
+  check('chatHistoryRestored', $('chatLog').textContent.includes('叫我阿香'));
+
+  tryRun('escapeClose', () => {
+    openGrowth();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  });
+  check('escapeClose', !growth.classList.contains('show'));
+
+  tryRun('themes', () => document.querySelectorAll('.theme-btn').forEach((btn) => btn.click()));
+  check('themes', stage.dataset.theme === 'cyber');
+  tryRun('soundToggles', () => ['soundOn', 'soundFx', 'soundMusic', 'soundEgg', 'prank', 'attention'].forEach((id) => {
+    const el = $(id);
+    el.checked = !el.checked;
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    el.checked = !el.checked;
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }));
+
+  // A real drag must not be counted as a tap; a stationary press must be.
+  const tapsBeforeDrag = state.stats.clicks;
+  const mouse = (type, screenX) => new MouseEvent(type, {
+    bubbles: true, button: 0, screenX, screenY: 120, clientX: 100, clientY: 100
+  });
+  tryRun('dragNotTap', () => {
+    pet.dispatchEvent(mouse('mousedown', 100));
+    document.dispatchEvent(mouse('mousemove', 180));
+    document.dispatchEvent(mouse('mouseup', 180));
+  });
+  check('dragNotTap', state.stats.clicks === tapsBeforeDrag);
+  tryRun('stationaryTap', () => {
+    pet.dispatchEvent(mouse('mousedown', 220));
+    document.dispatchEvent(mouse('mouseup', 220));
+  });
+  check('stationaryTap', state.stats.clicks === tapsBeforeDrag + 1);
+
+  tryRun('toolbarAnchor', () => {
+    const pr = petRoot.getBoundingClientRect();
+    const tr = $('toolbar').getBoundingClientRect();
+    const br = bubble.getBoundingClientRect();
+    const centre = pr.left + pr.width / 2;
+    const toolbarCentre = tr.left + tr.width / 2;
+    const bubbleCentre = br.left + br.width / 2;
+    if (Math.abs(toolbarCentre - centre) > 2) {
+      throw new Error(`toolbar off-centre by ${(toolbarCentre - centre).toFixed(1)}px`);
+    }
+    if (Math.abs(bubbleCentre - centre) > 2) {
+      throw new Error(`bubble off-centre by ${(bubbleCentre - centre).toFixed(1)}px`);
+    }
+  });
+
+  tryRun('expCurve', () => {
+    if (levelFromExp(0) !== 1 || levelFromExp(LEVELS[LEVELS.length - 1].exp) !== LEVELS.length) {
+      throw new Error('level thresholds broken');
+    }
+    state.exp = 35;
+    state.level = levelFromExp(35);
+    const p = expProgress();
+    if (p.percent < 0 || p.percent > 100) throw new Error('exp percent out of range');
+  });
+
+  tryRun('dirtySaveMigration', () => {
+    const original = localStorage.getItem(STORAGE_KEY);
+    try {
+      localStorage.setItem(STORAGE_KEY, '{not json');
+      const broken = loadState();
+      if (broken.level !== 1 || broken.incense !== 80) throw new Error('broken JSON fallback failed');
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        incense: 'abc', mood: -50, exp: 9999, level: 1,
+        stats: { clicks: 'x', feeds: null },
+        settings: { scale: 99, theme: 'nope' },
+        chat: { history: 'bad' }, collection: [0, 0, 99],
+        daily: { fortuneId: 999 }
+      }));
+      const dirty = loadState();
+      if (dirty.incense < 0 || dirty.incense > 100) throw new Error('incense not clamped');
+      if (dirty.level !== LEVELS.length) throw new Error('level not derived from exp');
+      if (dirty.settings.scale > 1.4 || dirty.settings.theme !== 'classic') throw new Error('settings not sanitized');
+      if (!Array.isArray(dirty.chat.history)) throw new Error('history not sanitized');
+      if (dirty.collection.some((n) => n < 0 || n >= FORTUNES.length)) throw new Error('collection not sanitized');
+      if (dirty.daily.fortuneId >= FORTUNES.length) throw new Error('fortuneId not clamped');
+    } finally {
+      if (original === null) localStorage.removeItem(STORAGE_KEY);
+      else localStorage.setItem(STORAGE_KEY, original);
+    }
+  });
+
+  tryRun('restoreTestSettings', () => {
+    state.settings.scale = savedScale;
+    state.settings.opacity = savedOpacity;
+    $('scale').value = savedScale;
+    $('opacity').value = savedOpacity;
+    applyUIScale(savedScale);
+    sendScale(savedScale, true);
+    ipcRenderer.send('set-opacity', savedOpacity);
+  });
+
+  // The final IPC assertions need the About panel open when replies arrive.
+  tryRun('finalAbout', () => {
+    openAbout();
+    checkUpdate();
+  });
+  check('finalAbout', about.classList.contains('show'));
+
   setTimeout(() => {
-    check('chatReply', $('chatLog').children.length > rowsBeforeSend);
+    check('chatReply', $('chatLog').textContent.includes('记住啦'));
     check('appInfo', $('appVersion').textContent !== '读取中…' && $('appVersion').textContent !== '--');
     check('updateChecked', $('latestVersion').textContent !== '--' && $('updateStatus').textContent !== '正在读取版本信息…');
     check('updateButton', $('checkUpdateBtn').disabled === false);
+    try {
+      if (savedStateRaw === null) localStorage.removeItem(STORAGE_KEY);
+      else localStorage.setItem(STORAGE_KEY, savedStateRaw);
+    } catch (err) {
+      errors.push(`restoreState: ${err && err.message || err}`);
+    }
     console.log('RENDERER SELFTEST: sending done', errors.length ? errors.join(' | ') : 'OK');
     ipcRenderer.send('selftest-done', errors);
   }, 650);
