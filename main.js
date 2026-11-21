@@ -6,6 +6,7 @@ const https = require('https');
 let petWindow = null;
 let fxWindow = null;
 let fxTimer = null;
+let fxTopTimer = null;
 let dragTimer = null;
 let dragStartCursor = null;
 let dragStartWindow = null;
@@ -257,6 +258,10 @@ function closeFxWindow() {
     clearTimeout(fxTimer);
     fxTimer = null;
   }
+  if (fxTopTimer) {
+    clearInterval(fxTopTimer);
+    fxTopTimer = null;
+  }
   if (fxWindow) {
     if (!fxWindow.isDestroyed()) fxWindow.close();
     fxWindow = null;
@@ -268,16 +273,24 @@ function openFxWindow(browserWindow, html, file, duration) {
   fxWindow = browserWindow;
   // Windows clamps a freshly created always-on-top window to the work area,
   // which leaves the taskbar uncovered. Re-apply the full desktop bounds
-  // synchronously so the prank really fills every pixel.
-  fxWindow.setBounds(fullDesktopBounds());
+  // synchronously and add a 2-DIP bleed so DPI rounding / rounded window
+  // corners cannot expose a hairline of desktop at the edges.
+  const b = fullDesktopBounds();
+  fxWindow.setBounds({ x: b.x - 2, y: b.y - 2, width: b.width + 4, height: b.height + 4 });
   fxWindow.setAlwaysOnTop(true, 'screen-saver');
   fxWindow.setIgnoreMouseEvents(true);
   if (html) fxWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
   else fxWindow.loadFile(path.join(__dirname, file));
+  // Other apps can raise their own topmost windows above ours while the
+  // prank is running. Re-assert the level periodically to keep the overlay
+  // in front for its whole lifetime.
+  fxTopTimer = setInterval(() => {
+    if (fxWindow && !fxWindow.isDestroyed()) fxWindow.setAlwaysOnTop(true, 'screen-saver');
+  }, 400);
   fxTimer = setTimeout(closeFxWindow, duration);
 }
 
-function showBlueScreen() {
+function showBlueScreen(duration = 7000) {
   const bounds = fullDesktopBounds();
   const win = new BrowserWindow({
     x: bounds.x,
@@ -314,7 +327,7 @@ function showBlueScreen() {
       <div class="prog"><i></i></div>
     </div>
   </body></html>`;
-  openFxWindow(win, html, null, 7000);
+  openFxWindow(win, html, null, duration);
 }
 
 function showOverlay(file, duration, transparent) {
@@ -360,7 +373,7 @@ app.whenReady().then(() => {
     const mode = process.env.PANDA_PRANK_PROBE;
     setTimeout(() => {
       if (mode === 'swarm') showOverlay('swarm.html', 15000, true);
-      else if (mode === 'blue') showBlueScreen();
+      else if (mode === 'blue') showBlueScreen(120000);
       else if (mode === 'shutdown') showOverlay('shutdown.html', 15000, false);
     }, 400);
   }
