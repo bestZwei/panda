@@ -266,6 +266,10 @@ function closeFxWindow() {
 function openFxWindow(browserWindow, html, file, duration) {
   closeFxWindow();
   fxWindow = browserWindow;
+  // Windows clamps a freshly created always-on-top window to the work area,
+  // which leaves the taskbar uncovered. Re-apply the full desktop bounds
+  // synchronously so the prank really fills every pixel.
+  fxWindow.setBounds(fullDesktopBounds());
   fxWindow.setAlwaysOnTop(true, 'screen-saver');
   fxWindow.setIgnoreMouseEvents(true);
   if (html) fxWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
@@ -342,6 +346,7 @@ app.whenReady().then(() => {
 
   globalShortcut.register('CommandOrControl+Alt+1', () => showOverlay('swarm.html', 8500, true));
   globalShortcut.register('CommandOrControl+Alt+2', () => showOverlay('shutdown.html', 9500, false));
+  globalShortcut.register('CommandOrControl+Alt+3', showBlueScreen);
   globalShortcut.register('CommandOrControl+Alt+0', () => {
     if (fxWindow) closeFxWindow();
   });
@@ -349,6 +354,16 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createPetWindow();
   });
+
+  // Dev-only: hold a single prank open so it can be visually inspected.
+  if (process.env.PANDA_PRANK_PROBE) {
+    const mode = process.env.PANDA_PRANK_PROBE;
+    setTimeout(() => {
+      if (mode === 'swarm') showOverlay('swarm.html', 15000, true);
+      else if (mode === 'blue') showBlueScreen();
+      else if (mode === 'shutdown') showOverlay('shutdown.html', 15000, false);
+    }, 400);
+  }
 
   // Dev-only self test: actually open every full-screen prank and drive the
   // renderer's new interaction paths so runtime errors surface instead of
