@@ -238,12 +238,18 @@ function createPetWindow() {
     });
     petWindow.webContents.on('did-finish-load', () => {
       console.log('SELFTEST: renderer did-finish-load');
+    });
+    // Handshake instead of a fixed delay: a slow/cold start used to make the
+    // main process send `selftest-run` before the renderer had registered
+    // its listener, so the whole renderer self-test silently never ran.
+    ipcMain.once('selftest-renderer-ready', () => {
+      console.log('SELFTEST: renderer ready');
       setTimeout(() => {
         if (petWindow && !petWindow.isDestroyed()) {
           console.log('SELFTEST: sending renderer run');
           petWindow.webContents.send('selftest-run');
         }
-      }, 2600);
+      }, 300);
     });
   }
 
@@ -359,7 +365,7 @@ app.whenReady().then(() => {
 
   globalShortcut.register('CommandOrControl+Alt+1', () => showOverlay('swarm.html', 8500, true));
   globalShortcut.register('CommandOrControl+Alt+2', () => showOverlay('shutdown.html', 9500, false));
-  globalShortcut.register('CommandOrControl+Alt+3', showBlueScreen);
+  globalShortcut.register('CommandOrControl+Alt+3', () => showBlueScreen());
   globalShortcut.register('CommandOrControl+Alt+0', () => {
     if (fxWindow) closeFxWindow();
   });
@@ -382,20 +388,33 @@ app.whenReady().then(() => {
   // renderer's new interaction paths so runtime errors surface instead of
   // only checking startup.
   if (process.env.PANDA_SELFTEST === '1') {
+    const mainErrors = [];
+    const checkMain = (name, ok) => { if (!ok) mainErrors.push(name); };
+    // Exercise the exact IPC path the renderer uses. A regression here used
+    // to hand the IPC event to showBlueScreen as `duration`, so setTimeout
+    // coerced it to 0 and the overlay closed almost instantly.
+    setTimeout(() => ipcMain.emit('show-bluescreen', {}), 200);
+    setTimeout(() => {
+      checkMain('ipcBlueScreenStaysOpen', !!fxWindow && !fxWindow.isDestroyed());
+      closeFxWindow();
+    }, 900);
+
     const steps = [
       () => showOverlay('swarm.html', 400, true),
       () => showBlueScreen(),
       () => showOverlay('shutdown.html', 400, false)
     ];
-    steps.forEach((fn, i) => setTimeout(fn, 300 + i * 700));
+    steps.forEach((fn, i) => setTimeout(fn, 1200 + i * 700));
     ipcMain.once('selftest-done', (event, errors) => {
       console.log('SELFTEST: received renderer result');
       console.log('RENDERER SELFTEST:', errors.length ? errors.join(' | ') : 'OK');
+      checkMain('rendererReported', Array.isArray(errors));
     });
     setTimeout(() => {
+      console.log('MAIN SELFTEST:', mainErrors.length ? mainErrors.join(' | ') : 'OK');
       console.log('SELFTEST: timeout reached, quitting');
       app.quit();
-    }, 6000);
+    }, 9000);
   }
 });
 
@@ -568,7 +587,10 @@ ipcMain.on('open-update-url', (event, url) => {
   });
 });
 
-ipcMain.on('show-bluescreen', showBlueScreen);
+// ipcMain handlers receive the IPC event as their first argument. Passing
+// showBlueScreen directly used to make `duration` an event object, which
+// setTimeout coerced to 0 and closed the blue screen instantly.
+ipcMain.on('show-bluescreen', () => showBlueScreen());
 ipcMain.on('show-swarm', () => showOverlay('swarm.html', 8500, true));
 ipcMain.on('show-shutdown', () => showOverlay('shutdown.html', 9500, false));
 

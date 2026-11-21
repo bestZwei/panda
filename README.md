@@ -1,6 +1,6 @@
 # 熊猫烧香趣味桌宠
 
-当前版本：**1.2.3**  
+当前版本：**1.2.4**  
 定位：一款致敬 2006 年经典梗图的桌面宠物。全部“感染、蓝屏、关机”效果都是**纯视觉玩笑**，不修改文件、不复制自身、不联网上报。
 
 ## 简介
@@ -139,7 +139,7 @@ npm start
 
 ```json
 {
-  "version": "1.2.3",
+  "version": "1.2.4",
   "released": "2026-11-21",
   "feedUrl": "https://example.com/panda-update.json",
   "downloadUrl": "https://example.com/panda-download",

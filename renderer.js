@@ -161,7 +161,15 @@ function loadState() {
       ...base,
       ...parsed,
       settings: { ...base.settings, ...(parsed.settings || {}) },
-      achievements: { ...base.achievements, ...(parsed.achievements || {}) },
+      // Only the 23 known achievement ids count, and only a literal true
+      // unlocks one. A dirty save with strings/arrays used to inflate the
+      // achievement counter without the wall showing those badges.
+      achievements: Object.fromEntries(ACHIEVEMENTS.map((a) => [
+        a.id,
+        parsed.achievements && typeof parsed.achievements === 'object'
+          ? parsed.achievements[a.id] === true
+          : false
+      ])),
       stats: {
         ...base.stats,
         ...parsedStats,
@@ -170,15 +178,23 @@ function loadState() {
       chat: {
         ...base.chat,
         ...parsedChat,
-        history: Array.isArray(parsedChat.history) ? parsedChat.history.slice(-20) : []
+        // A dirty save used to be able to put null / strings in history.
+        // openChat() reads turn.me, so sanitize the shape here as well.
+        history: Array.isArray(parsedChat.history)
+          ? parsedChat.history
+            .filter((turn) => turn && typeof turn === 'object' && !Array.isArray(turn))
+            .map((turn) => ({
+              me: typeof turn.me === 'string' ? turn.me.slice(0, 60) : '',
+              panda: typeof turn.panda === 'string' ? turn.panda.slice(0, 200) : ''
+            }))
+            .filter((turn) => turn.me || turn.panda)
+            .slice(-20)
+          : []
       },
       daily: { ...base.daily, ...parsedDaily },
       // Old saves had no collection; keep any array of fortune ids.
-      collection: Array.isArray(parsed.collection) ? parsed.collection.slice(0, 200) : []
+      collection: Array.isArray(parsed.collection) ? [...new Set(parsed.collection)].slice(0, FORTUNES.length) : []
     };
-    if (!result.achievements || typeof result.achievements !== 'object' || Array.isArray(result.achievements)) {
-      result.achievements = {};
-    }
     const s = result.settings;
     result.settings = {
       scale: safeNum(s.scale, 1, .7, 1.4),
@@ -788,8 +804,8 @@ function openChat() {
   if (!$('chatLog').children.length) {
     if (state.chat.history.length) {
       state.chat.history.forEach((turn) => {
-        if (turn.me) appendChat('me', turn.me);
-        if (turn.panda) appendChat('panda', turn.panda);
+        if (turn && turn.me) appendChat('me', turn.me);
+        if (turn && turn.panda) appendChat('panda', turn.panda);
       });
     } else {
       appendChat('panda', `你好呀${state.chat.name ? '，' + state.chat.name : ''}！我是熊猫烧香～`);
@@ -959,7 +975,8 @@ function collectFortune(index) {
 function doDailyFortune() {
   markActive();
   const today = todayKey();
-  if (state.daily.date !== today) {
+  const isNew = state.daily.date !== today;
+  if (isNew) {
     // Stable for the whole day: derive the index from the date string.
     let hash = 0;
     for (let i = 0; i < today.length; i += 1) hash = (hash * 31 + today.charCodeAt(i)) >>> 0;
@@ -972,11 +989,13 @@ function doDailyFortune() {
   result.classList.remove('reveal');
   void result.offsetWidth;
   result.classList.add('reveal');
-  say(`今日签：${fortune.level}`, 2400);
+  // Re-reading today's fortune is free; only the first draw of the day pays
+  // out EXP, otherwise the button becomes an unlimited experience farm.
+  say(isNew ? `今日签：${fortune.level}` : `今日已签过：${fortune.level}`, 2400);
   soundFeed();
   collectFortune(state.daily.fortuneId);
   unlock('dailyFortune', '每日一签');
-  addExp(8 + (state.level >= 6 ? 2 : 0), 'daily');
+  if (isNew) addExp(8 + (state.level >= 6 ? 2 : 0), 'daily');
   saveState();
   renderState();
 }
@@ -1723,7 +1742,10 @@ saveState();
 markActive();
 scheduleAmbient();
 say('你好，我是熊猫烧香！', 2600);
-if (process.env.PANDA_SELFTEST === '1') console.log('RENDERER BOOT: ready');
+if (process.env.PANDA_SELFTEST === '1') {
+  console.log('RENDERER BOOT: ready');
+  ipcRenderer.send('selftest-renderer-ready');
+}
 
 // Dev-only renderer self test. The main process sends this after startup so
 // interaction paths are exercised for real, not just syntax-checked.
@@ -1824,6 +1846,29 @@ ipcRenderer.on('selftest-run', () => {
   });
   check('chatHistoryRestored', $('chatLog').textContent.includes('叫我阿香'));
 
+  // A malformed save used to make openChat() throw on a null history entry.
+  tryRun('dirtyHistoryOpen', () => {
+    const savedHistory = state.chat.history;
+    const savedLog = $('chatLog').innerHTML;
+    try {
+      state.chat.history = [null];
+      $('chatLog').innerHTML = '';
+      openChat();
+      if (!chat.classList.contains('show')) throw new Error('chat did not open for dirty history');
+    } finally {
+      state.chat.history = savedHistory;
+      $('chatLog').innerHTML = savedLog;
+    }
+  });
+
+  // Re-reading the same daily fortune must not hand out EXP twice.
+  tryRun('dailyExpGate', () => {
+    doDailyFortune();
+    const afterFirst = state.exp;
+    doDailyFortune();
+    if (state.exp !== afterFirst) throw new Error('daily fortune paid out twice');
+  });
+
   tryRun('escapeClose', () => {
     openGrowth();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -1892,7 +1937,9 @@ ipcRenderer.on('selftest-run', () => {
         incense: 'abc', mood: -50, exp: 9999, level: 1,
         stats: { clicks: 'x', feeds: null },
         settings: { scale: 99, theme: 'nope' },
-        chat: { history: 'bad' }, collection: [0, 0, 99],
+        achievements: { firstClick: 'false', unknownBadge: true },
+        chat: { history: [null, 'bad', { me: 5, panda: null }, { me: 'ok', panda: 'fine' }] },
+        collection: [0, 0, 99, 1],
         daily: { fortuneId: 999 }
       }));
       const dirty = loadState();
@@ -1900,7 +1947,14 @@ ipcRenderer.on('selftest-run', () => {
       if (dirty.level !== LEVELS.length) throw new Error('level not derived from exp');
       if (dirty.settings.scale > 1.4 || dirty.settings.theme !== 'classic') throw new Error('settings not sanitized');
       if (!Array.isArray(dirty.chat.history)) throw new Error('history not sanitized');
+      if (dirty.chat.history.some((turn) => !turn || typeof turn.me !== 'string' || typeof turn.panda !== 'string')) {
+        throw new Error('history entries not sanitized');
+      }
       if (dirty.collection.some((n) => n < 0 || n >= FORTUNES.length)) throw new Error('collection not sanitized');
+      if (new Set(dirty.collection).size !== dirty.collection.length) throw new Error('collection not deduplicated');
+      if (dirty.achievements.firstClick !== false || dirty.achievements.unknownBadge !== undefined) {
+        throw new Error('achievements not sanitized');
+      }
       if (dirty.daily.fortuneId >= FORTUNES.length) throw new Error('fortuneId not clamped');
     } finally {
       if (original === null) localStorage.removeItem(STORAGE_KEY);
